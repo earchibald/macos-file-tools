@@ -11,7 +11,7 @@ components:
 requires:
   binaries:
     - name: mft
-      install_hint: "curl -fsSL https://raw.githubusercontent.com/earchibald/macos-file-tools/main/install.sh | sh"
+      install_hint: "curl -fsSL https://github.com/earchibald/macos-file-tools/releases/latest/download/install.sh | sh"
 ---
 
 # macOS File Versions
@@ -25,7 +25,7 @@ it, show what changed, and take a change back.
 
 1. Install the tools. This puts `mft` and a command per tool in `~/.local/bin`:
 
-   `curl -fsSL https://raw.githubusercontent.com/earchibald/macos-file-tools/main/install.sh | sh`
+   `curl -fsSL https://github.com/earchibald/macos-file-tools/releases/latest/download/install.sh | sh`
 
 2. Make sure `~/.local/bin` is on the PATH of your login shell. The plugin
    stays orange (needs configuration) until `mft` can be found there.

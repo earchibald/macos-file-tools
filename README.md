@@ -36,7 +36,7 @@ restored	94f57a17-2e24-43d8-a2cb-91a41d9f23ba	/Users/me/notes.txt
 Requires macOS 13 or later. The release is one universal program (Apple silicon and Intel), signed with a Developer ID and notarized by Apple.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/earchibald/macos-file-tools/v0.0.1/install.sh | sh
+curl -fsSL https://github.com/earchibald/macos-file-tools/releases/latest/download/install.sh | sh
 ```
 
 This checks the download against its published checksum, then puts `mft` and a command for each tool in `~/.local/bin`, and supporting files (the agent plugins, shell completions, a copy of the guide) in `~/.local/share/mft`.
@@ -683,6 +683,8 @@ For the Antigravity CLI, `agy`:
 ```sh
 agy plugin install ~/.local/share/mft/plugins/antigravity
 ```
+
+Or straight from GitHub, which `agy plugin validate` accepts and `agy plugin install` should too: `agy plugin install https://github.com/earchibald/macos-file-tools/tree/main/plugins/antigravity`.
 
 The plugin adds the skill, launchers for the tools, and a `PreToolUse` hook for `write_to_file`, `replace_file_content` and `multi_replace_file_content`. The hook answers `{"decision":"allow"}`, which Antigravity documents as handing the decision on to your normal permission settings: it never approves or blocks an edit itself.
 

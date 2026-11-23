@@ -42,4 +42,4 @@ scripts/package.sh --sign "$identity" --notarize "$profile"
 # The release notes are the section of CHANGELOG.md for this version.
 notes="$(awk -v v="$version" '$0 ~ "^## " v { on = 1; next } /^## / { on = 0 } on' CHANGELOG.md)"
 gh release create "$tag" --verify-tag --title "mft $version" --notes "$notes" \
-  dist/mft-macos-universal.zip dist/mft-macos-universal.zip.sha256
+  dist/mft-macos-universal.zip dist/mft-macos-universal.zip.sha256 install.sh

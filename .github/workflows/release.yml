@@ -84,7 +84,7 @@ jobs:
           awk -v v="$VERSION" '$0 ~ "^## " v { on = 1; next } /^## / { on = 0 } on' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
           gh release create "$GITHUB_REF_NAME" --verify-tag --title "mft $VERSION" \
             --notes-file "$RUNNER_TEMP/notes.md" \
-            dist/mft-macos-universal.zip dist/mft-macos-universal.zip.sha256
+            dist/mft-macos-universal.zip dist/mft-macos-universal.zip.sha256 install.sh
 
       - name: Package without signing
         if: env.HAVE_SIGNING != 'true'

@@ -11,7 +11,7 @@ Versions are a safety net for work in progress. They are not a replacement for g
 
 ## First check the tools are there
 
-Run `mft --version`. If the command is missing or fails with `not_installed`, ask the user before installing. Run `mft-install` if that command exists; otherwise run `curl -fsSL https://raw.githubusercontent.com/earchibald/macos-file-tools/main/install.sh | sh`. Either downloads the signed release from GitHub into `~/.local/bin`.
+Run `mft --version`. If the command is missing or fails with `not_installed`, ask the user before installing. Run `mft-install` if that command exists; otherwise run `curl -fsSL https://github.com/earchibald/macos-file-tools/releases/latest/download/install.sh | sh`. Either downloads the signed release from GitHub into `~/.local/bin`.
 
 Run `mft guide` once for a one-page reference. `mft describe` gives the same as JSON with every record field, and `TOOL --help` shows one tool's options and examples.
 

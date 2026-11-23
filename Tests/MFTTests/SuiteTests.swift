@@ -623,7 +623,7 @@ final class PackagingTests: SuiteTestCase {
         XCTAssertTrue(text("plugins/iris/mft/plugin.md").contains("\nversion: \(version)\n"))
         XCTAssertTrue(text("plugins/shared/bin/mft-install").contains("MFT_VERSION:-\(version)}"))
         XCTAssertTrue(text("CHANGELOG.md").contains("\n## \(version)\n"))
-        XCTAssertTrue(text("README.md").contains("/v\(version)/install.sh"))
+        XCTAssertTrue(text("README.md").contains("releases/latest/download/install.sh"))
     }
 
     func testSharedPluginFilesAreInSync() throws {

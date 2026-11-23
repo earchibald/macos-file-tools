@@ -2,7 +2,7 @@
 # Installs mft and a command for each of its tools.
 #
 #   From an unpacked release folder:   ./install.sh
-#   Straight from GitHub:              curl -fsSL https://raw.githubusercontent.com/earchibald/macos-file-tools/main/install.sh | sh
+#   Straight from GitHub:              curl -fsSL https://github.com/earchibald/macos-file-tools/releases/latest/download/install.sh | sh
 #
 # Settings (environment variables):
 #   MFT_PREFIX    where to install; default ~/.local  (programs go in $MFT_PREFIX/bin)
