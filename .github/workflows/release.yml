@@ -1,0 +1,100 @@
+name: Release
+
+# Runs when a version tag is pushed. It always checks that the tag matches the
+# version in the source and that the build and tests pass at that tag.
+#
+# If these repository secrets exist, it also signs, notarizes and publishes
+# the GitHub release:
+#
+#   DEVELOPER_ID_P12_BASE64     the Developer ID Application certificate and key, exported
+#                               as .p12 and base64-encoded
+#   DEVELOPER_ID_P12_PASSWORD   the password chosen when exporting it
+#   DEVELOPER_ID_IDENTITY       e.g. "Developer ID Application: Name (TEAMID)"
+#   NOTARY_APPLE_ID             Apple ID used for notarization
+#   NOTARY_TEAM_ID              the team id
+#   NOTARY_PASSWORD             an app-specific password for that Apple ID
+#
+# Without them it stops after the checks, and the release is published from a
+# Mac that holds the certificate:  scripts/release.sh --notarize PROFILE
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-26
+    env:
+      HAVE_SIGNING: ${{ secrets.DEVELOPER_ID_P12_BASE64 != '' && secrets.NOTARY_PASSWORD != '' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check the tag matches the version in the source
+        run: |
+          version="$(sed -n 's/^public let mftVersion = "\(.*\)"$/\1/p' Sources/MFTCore/Conventions.swift)"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::the pushed tag does not match source version $version"
+            exit 1
+          fi
+          grep -q "^## $version" CHANGELOG.md || { echo "::error::CHANGELOG.md has no section for $version"; exit 1; }
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: swift build
+
+      - name: Check macOS versioning on this runner
+        run: .build/debug/mft selftest --text
+
+      - name: Test
+        run: swift test
+
+      - name: Import the signing certificate
+        if: env.HAVE_SIGNING == 'true'
+        env:
+          P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          echo "$P12_BASE64" | base64 --decode > "$RUNNER_TEMP/developer-id.p12"
+          security create-keychain -p "$RUNNER_TEMP" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$RUNNER_TEMP" "$keychain"
+          security import "$RUNNER_TEMP/developer-id.p12" -k "$keychain" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$RUNNER_TEMP" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/developer-id.p12"
+
+      - name: Package, sign and notarize
+        if: env.HAVE_SIGNING == 'true'
+        env:
+          SIGNING_IDENTITY: ${{ secrets.DEVELOPER_ID_IDENTITY }}
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+        run: scripts/package.sh --sign "$SIGNING_IDENTITY" --notarize env
+
+      - name: Publish the GitHub release
+        if: env.HAVE_SIGNING == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          awk -v v="$VERSION" '$0 ~ "^## " v { on = 1; next } /^## / { on = 0 } on' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "mft $VERSION" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            dist/mft-macos-universal.zip dist/mft-macos-universal.zip.sha256 install.sh
+
+      - name: Package without signing
+        if: env.HAVE_SIGNING != 'true'
+        run: |
+          scripts/package.sh
+          echo "::notice::No signing secrets, so no release was published. Publish from a Mac with the certificate: scripts/release.sh --notarize PROFILE"
+
+      - uses: actions/upload-artifact@v7
+        if: env.HAVE_SIGNING != 'true'
+        with:
+          name: mft-macos-universal-unsigned
+          path: dist/mft-macos-universal.zip*
+          retention-days: 14

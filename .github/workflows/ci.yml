@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-26]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Show toolchain
+        run: |
+          sw_vers
+          swift --version
+
+      - name: Check the plugins' shared files are in sync
+        run: scripts/sync-plugins.sh --check
+
+      - name: Build
+        run: swift build
+
+      # Fails loudly if this runner's macOS does not version files the way the
+      # tools assume, which the unit tests alone would only show as noise.
+      - name: Check macOS versioning on this runner
+        run: .build/debug/mft selftest --text
+
+      - name: Test
+        run: swift test
+
+  package:
+    name: Package
+    runs-on: macos-26
+    needs: test
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the universal package (ad hoc signature)
+        run: scripts/package.sh
+
+      - name: Install from the package and run it
+        run: |
+          ditto -x -k dist/mft-macos-universal.zip "$RUNNER_TEMP/unpacked"
+          MFT_PREFIX="$RUNNER_TEMP/prefix" sh "$RUNNER_TEMP"/unpacked/mft-*/install.sh
+          export PATH="$RUNNER_TEMP/prefix/bin:$PATH"
+          lipo -archs "$RUNNER_TEMP/prefix/bin/mft"
+          echo "hello" > "$RUNNER_TEMP/probe.txt"
+          ver-add "$RUNNER_TEMP/probe.txt"
+          ver-ls --text "$RUNNER_TEMP/probe.txt"
+
+      - name: Check the plugin launchers find the installed program
+        run: |
+          export MFT_BIN="$RUNNER_TEMP/prefix/bin/mft"
+          plugins/claude-code/bin/mft --version
+          plugins/antigravity/bin/ver-status --text "$RUNNER_TEMP/probe.txt"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mft-macos-universal-unsigned
+          path: dist/mft-macos-universal.zip*
+          retention-days: 14
