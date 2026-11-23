@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "mft",
-      "source": "./plugin",
+      "source": "./plugins/claude-code",
       "description": "Checkpoint, compare, undo and restore file versions on macOS, using the same version store as document apps."
     }
   ]

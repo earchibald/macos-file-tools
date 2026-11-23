@@ -201,7 +201,7 @@ public struct Emitter {
         var statuses = Set<Int32>()
         for path in paths {
             // Records always carry absolute paths, whatever the caller typed.
-            var url = URL(fileURLWithPath: path).standardizedFileURL
+            var url = absoluteURL(path)
             do {
                 // A symlink operand means the file it points to.
                 if (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink == true {
@@ -229,6 +229,15 @@ public struct Emitter {
 }
 
 // MARK: Small helpers
+
+/// The absolute form of a path that every record uses. macOS shortens
+/// /private/var to /var only for paths that exist, so a path that does not
+/// exist yet is built from its folder, which does.
+public func absoluteURL(_ path: String) -> URL {
+    let url = URL(fileURLWithPath: path).standardizedFileURL
+    if FileManager.default.fileExists(atPath: url.path) { return url }
+    return url.deletingLastPathComponent().standardizedFileURL.appendingPathComponent(url.lastPathComponent)
+}
 
 public func iso8601(_ date: Date) -> String {
     ISO8601DateFormatter().string(from: date)

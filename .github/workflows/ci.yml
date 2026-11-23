@@ -28,6 +28,9 @@ jobs:
           sw_vers
           swift --version
 
+      - name: Check the plugins' shared files are in sync
+        run: scripts/sync-plugins.sh --check
+
       - name: Build
         run: swift build
 
@@ -62,8 +65,8 @@ jobs:
       - name: Check the plugin launchers find the installed program
         run: |
           export MFT_BIN="$RUNNER_TEMP/prefix/bin/mft"
-          plugin/bin/mft --version
-          plugin/bin/ver-status --text "$RUNNER_TEMP/probe.txt"
+          plugins/claude-code/bin/mft --version
+          plugins/antigravity/bin/ver-status --text "$RUNNER_TEMP/probe.txt"
 
       - uses: actions/upload-artifact@v7
         with:

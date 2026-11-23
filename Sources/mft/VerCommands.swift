@@ -345,7 +345,7 @@ struct VerCp: ParsableCommand {
     func run() throws {
         let emit = Emitter(tool: "ver-cp", output: output, mutation: mutation)
         try emit.forEach([source]) { url in
-            let target = URL(fileURLWithPath: destination).standardizedFileURL
+            let target = absoluteURL(destination)
             if FileManager.default.fileExists(atPath: target.path) {
                 throw ToolError(.alreadyExists, "\(target.path) already exists")
             }

@@ -1,0 +1,13 @@
+#!/bin/sh
+# Finds the installed mft program and runs it. A plugin carries only these
+# launchers; the signed program itself comes from the GitHub release.
+for candidate in "${MFT_BIN:-}" "$HOME/.local/bin/mft" /usr/local/bin/mft /opt/homebrew/bin/mft; do
+  if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+    exec "$candidate" "$@"
+  fi
+done
+
+# Not installed. A pre-edit hook must never get in the way of an edit.
+[ "${1:-}" = "hook" ] && exit 0
+printf '%s\n' '{"ok":false,"tool":"mft","path":"","error":{"code":"not_installed","message":"the mft program is not installed","hint":"Ask the user first, then run mft-install: it downloads the signed release from GitHub into ~/.local/bin."}}' >&2
+exit 69

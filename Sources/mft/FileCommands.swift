@@ -42,7 +42,7 @@ struct FileClone: ParsableCommand {
     func run() throws {
         let emit = Emitter(tool: "file-clone", output: output, mutation: mutation)
         try emit.forEach([source]) { url in
-            let target = URL(fileURLWithPath: destination).standardizedFileURL
+            let target = absoluteURL(destination)
             if FileManager.default.fileExists(atPath: target.path) {
                 throw ToolError(.alreadyExists, "\(target.path) already exists")
             }
@@ -90,7 +90,7 @@ struct FileSwap: ParsableCommand {
     func run() throws {
         let emit = Emitter(tool: "file-swap", output: output, mutation: mutation)
         try emit.forEach([first]) { url in
-            let other = URL(fileURLWithPath: second).standardizedFileURL
+            let other = absoluteURL(second)
             guard FileManager.default.fileExists(atPath: other.path) else {
                 throw ToolError(.noSuchFile, "\(other.path): no such file or directory")
             }

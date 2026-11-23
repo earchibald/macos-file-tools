@@ -25,6 +25,8 @@ cd "$root"
 version="$(sed -n 's/^public let mftVersion = "\(.*\)"$/\1/p' Sources/MFTCore/Conventions.swift)"
 [ -n "$version" ] || { echo "package.sh: cannot read the version from Conventions.swift" >&2; exit 1; }
 
+scripts/sync-plugins.sh --check
+
 echo "== Building mft $version (arm64 + x86_64)"
 swift build -c release --arch arm64 --arch x86_64
 built="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/mft"
@@ -50,9 +52,10 @@ echo "== Assembling $stage"
 "$stage/bin/mft" --generate-completion-script zsh > "$stage/share/mft/completions/_mft"
 "$stage/bin/mft" --generate-completion-script bash > "$stage/share/mft/completions/mft.bash"
 "$stage/bin/mft" --generate-completion-script fish > "$stage/share/mft/completions/mft.fish"
-cp plugin/skills/macos-file-versions/SKILL.md "$stage/share/mft/SKILL.md"
-# Outside the plugin there is no plugin folder: the hook calls mft from PATH.
-sed 's|\\"${CLAUDE_PLUGIN_ROOT}\\"/bin/mft|mft|' plugin/hooks/hooks.json > "$stage/share/mft/claude-code-hooks.json"
+cp plugins/shared/SKILL.md "$stage/share/mft/SKILL.md"
+# The plugins, so each agent can install its own from a stable local path.
+mkdir -p "$stage/share/mft/plugins"
+cp -R plugins/claude-code plugins/antigravity plugins/iris "$stage/share/mft/plugins/"
 cp install.sh README.md "$stage/"
 
 zip="dist/mft-macos-universal.zip"

@@ -599,7 +599,7 @@ final class ContractTests: SuiteTestCase {
     }
 }
 
-/// The plugin, the installer and the release notes must agree with the program.
+/// The plugins, the installer, the README and the release notes must agree with the program.
 final class PackagingTests: SuiteTestCase {
     func text(_ path: String) -> String {
         (try? String(contentsOf: Self.repository.appendingPathComponent(path), encoding: .utf8)) ?? ""
@@ -611,49 +611,127 @@ final class PackagingTests: SuiteTestCase {
 
     var version: String { mft("--version").out.trimmingCharacters(in: .whitespacesAndNewlines) }
 
+    var toolNames: [String] {
+        let data = Data(mft("describe").out.utf8)
+        let interface = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        return (interface["tools"] as? [[String: Any]] ?? []).map { $0["name"] as! String }
+    }
+
     func testVersionIsTheSameEverywhere() {
-        XCTAssertEqual(json("plugin/.claude-plugin/plugin.json")["version"] as? String, version)
-        XCTAssertTrue(text("plugin/bin/mft-install").contains("MFT_VERSION:-\(version)}"))
+        XCTAssertEqual(json("plugins/claude-code/.claude-plugin/plugin.json")["version"] as? String, version)
+        XCTAssertEqual(json("plugins/antigravity/plugin.json")["version"] as? String, version)
+        XCTAssertTrue(text("plugins/iris/mft/plugin.md").contains("\nversion: \(version)\n"))
+        XCTAssertTrue(text("plugins/shared/bin/mft-install").contains("MFT_VERSION:-\(version)}"))
         XCTAssertTrue(text("CHANGELOG.md").contains("\n## \(version)\n"))
         XCTAssertTrue(text("README.md").contains("/v\(version)/install.sh"))
     }
 
-    func testPluginHasALauncherForEveryTool() throws {
-        let data = Data(mft("describe").out.utf8)
-        let interface = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let tools = (interface["tools"] as! [[String: Any]]).map { $0["name"] as! String }
-        let bin = Self.repository.appendingPathComponent("plugin/bin")
+    func testSharedPluginFilesAreInSync() throws {
+        let process = Process()
+        process.executableURL = Self.repository.appendingPathComponent("scripts/sync-plugins.sh")
+        process.arguments = ["--check"]
+        let pipe = Pipe()
+        process.standardError = pipe
+        try process.run()
+        let complaints = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        process.waitUntilExit()
+        XCTAssertEqual(process.terminationStatus, 0, complaints)
+    }
+
+    func testThereIsALauncherForEveryTool() throws {
+        let bin = Self.repository.appendingPathComponent("plugins/shared/bin")
         let present = try FileManager.default.contentsOfDirectory(atPath: bin.path)
-        XCTAssertEqual(Set(present), Set(tools + ["mft", "mft-install"]))
-        for name in present {
-            XCTAssertTrue(FileManager.default.isExecutableFile(atPath: bin.appendingPathComponent(name).path), name)
+        XCTAssertEqual(Set(present), Set(toolNames + ["mft", "mft-install"]))
+        for plugin in ["shared", "claude-code", "antigravity"] {
+            for name in present {
+                let path = Self.repository.appendingPathComponent("plugins/\(plugin)/bin/\(name)").path
+                XCTAssertTrue(FileManager.default.isExecutableFile(atPath: path), "\(plugin)/bin/\(name)")
+            }
         }
     }
 
-    func testPluginFilesAreConsistent() {
-        XCTAssertEqual(text("plugin/scripts/install.sh"), text("install.sh"), "the plugin's installer is a copy of install.sh")
-        let plugin = json("plugin/.claude-plugin/plugin.json")
+    func testClaudeCodePluginFiles() {
+        let plugin = json("plugins/claude-code/.claude-plugin/plugin.json")
         let listed = (json(".claude-plugin/marketplace.json")["plugins"] as? [[String: Any]])?.first
         XCTAssertEqual(listed?["name"] as? String, plugin["name"] as? String)
-        XCTAssertEqual(listed?["source"] as? String, "./plugin")
-        let hooks = json("plugin/hooks/hooks.json")["hooks"] as? [String: Any]
-        XCTAssertNotNil(hooks?["PreToolUse"])
-        XCTAssertTrue(text("plugin/skills/macos-file-versions/SKILL.md").hasPrefix("---\nname: macos-file-versions\n"))
+        XCTAssertEqual(listed?["source"] as? String, "./plugins/claude-code")
+        let hooks = json("plugins/claude-code/hooks/hooks.json")["hooks"] as? [String: Any]
+        let group = (hooks?["PreToolUse"] as? [[String: Any]])?.first
+        XCTAssertEqual(group?["matcher"] as? String, "Edit|Write|MultiEdit|NotebookEdit")
     }
 
-    func testSkillOnlyNamesToolsThatExist() {
-        let skill = text("plugin/skills/macos-file-versions/SKILL.md")
+    func testAntigravityPluginFiles() {
+        XCTAssertEqual(json("plugins/antigravity/plugin.json")["name"] as? String, "mft")
+        // Named group, then event, then an array of matcher groups.
+        let group = json("plugins/antigravity/hooks.json")["mft-checkpoint"] as? [String: Any]
+        let entry = (group?["PreToolUse"] as? [[String: Any]])?.first
+        XCTAssertEqual(entry?["matcher"] as? String, "write_to_file|replace_file_content|multi_replace_file_content")
+        let command = ((entry?["hooks"] as? [[String: Any]])?.first)?["command"] as? String ?? ""
+        XCTAssertTrue(FileManager.default.isExecutableFile(
+            atPath: Self.repository.appendingPathComponent("plugins/antigravity").appendingPathComponent(command).path),
+            "the hook command must exist inside the plugin: \(command)")
+    }
+
+    func testIrisPluginFiles() {
+        let manifest = text("plugins/iris/mft/plugin.md")
+        XCTAssertTrue(manifest.hasPrefix("---\nipf: \"1.0\"\nid: mft\n"), "the id must equal the folder name")
+        XCTAssertTrue(manifest.contains("\n    - name: mft\n"))
+        let hooks = json("plugins/iris/mft/settings-hooks.json")["hooks"] as? [String: Any]
+        XCTAssertEqual(((hooks?["BeforeTool"] as? [[String: Any]])?.first)?["matcher"] as? String, "^write_file$")
+        // Iris has no bin folder to offer and drops hidden files, so the plugin ships neither.
+        let files = FileManager.default.enumerator(atPath: Self.repository.appendingPathComponent("plugins/iris/mft").path)?
+            .allObjects as? [String] ?? []
+        XCTAssertFalse(files.contains { $0.hasPrefix("bin") || $0.split(separator: "/").last!.hasPrefix(".") })
+    }
+
+    func testSkillMeetsEveryAgentsRules() {
+        let skill = text("plugins/shared/SKILL.md")
+        let lines = skill.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        XCTAssertEqual(lines[0], "---")
+        // The name must equal the skill's folder name; the description must sit on one line.
+        XCTAssertEqual(lines[1], "name: macos-file-versions")
+        XCTAssertTrue(lines[2].hasPrefix("description: "))
+        XCTAssertEqual(lines[3], "---")
+        XCTAssertLessThanOrEqual(lines[2].count - "description: ".count, 1024)
+
         let known = Set(mft("guide").out.split(whereSeparator: { !$0.isLetter && $0 != "-" }).map(String.init))
         let mentioned = Set(skill.split(whereSeparator: { !$0.isLetter && $0 != "-" }).map(String.init)
             .filter { $0.hasPrefix("ver-") || $0.hasPrefix("file-") })
         XCTAssertTrue(mentioned.isSubset(of: known), "unknown tools in SKILL.md: \(mentioned.subtracting(known))")
     }
 
-    func launcher(_ name: String, _ arguments: [String], environment: [String: String], stdin: String = "") -> (Int32, String) {
+    func testReadmeCoversEveryToolAndOption() throws {
+        let readme = text("README.md")
+        let data = Data(mft("--experimental-dump-help").out.utf8)
+        let root = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let subcommands = (root["command"] as? [String: Any])?["subcommands"] as? [[String: Any]] ?? []
+        for subcommand in subcommands {
+            let name = subcommand["commandName"] as! String
+            if name == "help" { continue }
+            let heading = toolNames.contains(name) ? "### `\(name)`" : "### `mft \(name)`"
+            guard let start = readme.range(of: heading + "\n") else {
+                XCTFail("README.md has no section headed \(heading)")
+                continue
+            }
+            let rest = readme[start.upperBound...]
+            let section = rest[..<(rest.range(of: "\n### ")?.lowerBound ?? rest.range(of: "\n## ")?.lowerBound ?? rest.endIndex)]
+            for argument in subcommand["arguments"] as? [[String: Any]] ?? [] {
+                for option in argument["names"] as? [[String: Any]] ?? [] where option["kind"] as? String == "long" {
+                    let flag = "--" + (option["name"] as! String)
+                    if ["--help", "--version", "--text", "--quiet", "--dry-run", "--timeout", "--null"].contains(flag) { continue }
+                    XCTAssertTrue(section.contains(flag), "README.md section for \(name) does not mention \(flag)")
+                }
+            }
+        }
+    }
+
+    func launcher(_ path: String, _ arguments: [String], environment: [String: String], stdin: String = "",
+                  directory: String? = nil) -> (Int32, String) {
         let process = Process()
-        process.executableURL = Self.repository.appendingPathComponent("plugin/bin/\(name)")
+        process.executableURL = Self.repository.appendingPathComponent(path)
         process.arguments = arguments
         process.environment = environment.merging(["PATH": "/usr/bin:/bin"]) { a, _ in a }
+        if let directory { process.currentDirectoryURL = Self.repository.appendingPathComponent(directory) }
         let (output, input) = (Pipe(), Pipe())
         process.standardOutput = output
         process.standardError = output
@@ -669,11 +747,12 @@ final class PackagingTests: SuiteTestCase {
     func testPluginLaunchersRunTheInstalledProgram() {
         write("a.txt", "one\n")
         let environment = ["MFT_BIN": Self.binary.path, "HOME": scratch.path, "MFT_HOME": scratch.path]
-        let (status, output) = launcher("ver-status", ["--text", scratch.appendingPathComponent("a.txt").path],
-                                        environment: environment)
+        let (status, output) = launcher(
+            "plugins/claude-code/bin/ver-status", ["--text", scratch.appendingPathComponent("a.txt").path],
+            environment: environment)
         XCTAssertEqual(status, 0, output)
         XCTAssertTrue(output.hasPrefix("0 version(s)\tfile"))
-        XCTAssertEqual(launcher("mft", ["--version"], environment: environment).1, version + "\n")
+        XCTAssertEqual(launcher("plugins/antigravity/bin/mft", ["--version"], environment: environment).1, version + "\n")
     }
 
     func testPluginLaunchersSayWhenTheProgramIsMissing() throws {
@@ -682,12 +761,52 @@ final class PackagingTests: SuiteTestCase {
             throw XCTSkip("mft is installed system-wide at \(systemWide)")
         }
         let nowhere = ["HOME": scratch.path]
-        let (status, output) = launcher("ver-ls", ["a.txt"], environment: nowhere)
+        let (status, output) = launcher("plugins/claude-code/bin/ver-ls", ["a.txt"], environment: nowhere)
         XCTAssertEqual(status, 69)
         XCTAssertTrue(output.contains("\"code\":\"not_installed\""))
         // The hook must stay out of the way even then.
-        let hook = launcher("mft", ["hook"], environment: nowhere, stdin: "{}")
+        let hook = launcher("plugins/claude-code/bin/mft", ["hook"], environment: nowhere, stdin: "{}")
         XCTAssertEqual(hook.0, 0)
         XCTAssertEqual(hook.1, "")
+    }
+
+    func testAntigravityHookStoresAVersionAndAlwaysAnswersAllow() throws {
+        write("a.txt", "one\n")
+        let event = """
+            {"toolCall":{"name":"replace_file_content","args":{"TargetFile":"\(scratch.path)/a.txt"}},
+             "conversationId":"ec33ebf9-0cba","workspacePaths":["\(scratch.path)"]}
+            """
+        let home = scratch.appendingPathComponent(".mft-home").path
+        let installed = launcher(
+            "plugins/antigravity/scripts/pre-edit-hook.sh", [],
+            environment: ["MFT_BIN": Self.binary.path, "HOME": scratch.path, "MFT_HOME": home],
+            stdin: event, directory: "plugins/antigravity")
+        XCTAssertEqual(installed.0, 0)
+        XCTAssertEqual(installed.1, "{\"decision\":\"allow\"}\n")
+        let stored = versions("a.txt")
+        XCTAssertEqual(stored.count, 1)
+        XCTAssertEqual(stored[0]["by"] as? String, "antigravity")
+        XCTAssertEqual(stored[0]["note"] as? String, "before replace_file_content (session ec33ebf9)")
+
+        for systemWide in ["/usr/local/bin/mft", "/opt/homebrew/bin/mft"]
+        where FileManager.default.fileExists(atPath: systemWide) { return }
+        let missing = launcher(
+            "plugins/antigravity/scripts/pre-edit-hook.sh", [], environment: ["HOME": scratch.path],
+            stdin: event, directory: "plugins/antigravity")
+        XCTAssertEqual(missing.0, 0)
+        XCTAssertEqual(missing.1, "{\"decision\":\"allow\"}\n")
+    }
+
+    func testHookReadsEachAgentsEventShape() {
+        write("iris.txt", "one\n")
+        write("reply.txt", "one\n")
+        // Iris passes the bare arguments, with a path that may be relative.
+        XCTAssertEqual(mft("hook", "--by", "iris", stdin: "{\"path\":\"iris.txt\",\"content\":\"x\"}").out, "")
+        XCTAssertEqual(versions("iris.txt").first?["by"] as? String, "iris")
+        // --reply is printed whether or not there was anything to store.
+        let reply = "{\"decision\":\"allow\"}"
+        XCTAssertEqual(mft("hook", "--reply", reply, stdin: "{\"path\":\"reply.txt\"}").out, reply + "\n")
+        XCTAssertEqual(mft("hook", "--reply", reply, stdin: "nonsense").out, reply + "\n")
+        XCTAssertEqual(versions("reply.txt").count, 1)
     }
 }

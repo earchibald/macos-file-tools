@@ -43,7 +43,7 @@ struct Link: ParsableCommand {
 
     func run() throws {
         let emit = Emitter(tool: "link", output: output, mutation: mutation)
-        let folder = URL(fileURLWithPath: dir).standardizedFileURL
+        let folder = absoluteURL(dir)
         let program = (Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0]))
             .resolvingSymlinksInPath()
         // A link beside the program stays valid if the folder is moved.
@@ -89,31 +89,59 @@ struct Hook: ParsableCommand {
         commandName: "hook",
         abstract: "Store a version of the file an agent is about to edit.",
         discussion: """
-            Reads an agent's pre-edit hook JSON on standard input and stores a
-            disposable version of the file named in tool_input.file_path. It prints
-            nothing and always exits 0, so it can never block or slow an edit.
+            Reads an agent's pre-edit hook event as JSON on standard input, finds
+            the file it names, and stores a disposable version of it. It always
+            exits 0 and prints nothing except --reply, so it can never block an edit.
 
-            EXAMPLE (Claude Code, in hooks.json):
-              {"hooks": {"PreToolUse": [{"matcher": "Edit|Write|MultiEdit|NotebookEdit",
-                "hooks": [{"type": "command", "command": "mft hook", "timeout": 10}]}]}}
+            The file path is taken from whichever of these the event has:
+            tool_input.file_path (Claude Code), toolCall.args.TargetFile
+            (Antigravity), or path (Iris). A relative path is resolved against the
+            event's cwd or first workspace path.
+
+            EXAMPLES:
+              mft hook --by claude-code
+              mft hook --by antigravity --reply '{"decision":"allow"}'
             """)
 
     @Option(help: "Who to record as storing the version.") var by: String = "agent"
+    @Option(help: "Text to print on standard output, for agents that require a hook to answer.")
+    var reply: String?
+
+    /// Keys that hold the path of the file being edited, in any agent's event.
+    static let pathKeys: Set<String> = ["file_path", "notebook_path", "targetfile", "target_file", "path", "absolutepath"]
 
     func run() {
+        // Whatever happens below, the agent gets its answer and a zero exit.
+        defer {
+            if let reply { print(reply) }
+        }
         let data = FileHandle.standardInput.readDataToEndOfFile()
         guard let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-        let input = event["tool_input"] as? [String: Any] ?? event
-        guard let path = ["file_path", "notebook_path", "path"].compactMap({ input[$0] as? String }).first
+        let call = event["toolCall"] as? [String: Any]
+        let input = event["tool_input"] as? [String: Any] ?? call?["args"] as? [String: Any] ?? event
+        guard let named = input.first(where: { Self.pathKeys.contains($0.key.lowercased()) && $0.value is String })?
+            .value as? String, !named.isEmpty
         else { return }
 
-        let base = (event["cwd"] as? String).map { URL(fileURLWithPath: $0) }
-        let url = URL(fileURLWithPath: path, relativeTo: base).standardizedFileURL
+        // Agents differ on where a relative path is relative to; try each in turn.
+        let environment = ProcessInfo.processInfo.environment
+        let bases = [
+            event["cwd"] as? String, (event["workspacePaths"] as? [String])?.first,
+            environment["GEMINI_CWD"], FileManager.default.currentDirectoryPath,
+        ].compactMap { $0 }
+        let path = NSString(string: named).expandingTildeInPath
+        let candidates = path.hasPrefix("/") ? [URL(fileURLWithPath: path)]
+            : bases.map { URL(fileURLWithPath: path, relativeTo: URL(fileURLWithPath: $0)) }
         // A file that does not exist yet has nothing to save.
-        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        guard let url = candidates.map(\.standardizedFileURL).first(where: {
+            FileManager.default.fileExists(atPath: $0.path)
+        }) else { return }
 
-        var note = "before " + (event["tool_name"] as? String ?? "edit")
-        if let session = event["session_id"] as? String { note += " (session \(session.prefix(8)))" }
+        let tool = event["tool_name"] as? String ?? call?["name"] as? String ?? "edit"
+        var note = "before \(tool)"
+        if let session = event["session_id"] as? String ?? event["conversationId"] as? String {
+            note += " (session \(session.prefix(8)))"
+        }
         Versions.timeout = 5
         _ = try? Versions.add(to: url, meta: Meta(note: note, by: by, auto: true))
     }

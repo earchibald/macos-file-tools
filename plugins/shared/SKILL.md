@@ -11,7 +11,7 @@ Versions are a safety net for work in progress. They are not a replacement for g
 
 ## First check the tools are there
 
-Run `mft --version`. If it fails with `not_installed`, ask the user before running `mft-install`, which downloads the signed release from GitHub into `~/.local/bin`.
+Run `mft --version`. If the command is missing or fails with `not_installed`, ask the user before installing. Run `mft-install` if that command exists; otherwise run `curl -fsSL https://raw.githubusercontent.com/earchibald/macos-file-tools/main/install.sh | sh`. Either downloads the signed release from GitHub into `~/.local/bin`.
 
 Run `mft guide` once for a one-page reference. `mft describe` gives the same as JSON with every record field, and `TOOL --help` shows one tool's options and examples.
 
@@ -86,5 +86,5 @@ ver-cp report.md report-copy.md
 - Deleting a file deletes its versions. Moving it to another volume loses them. Use `ver-cp` when history must travel.
 - Versions need an APFS volume. If a tool fails with `versions_unsupported`, run `ver-status --probe FILE` and tell the user; do not invent another backup scheme silently.
 - `ver-rm` and `ver-prune` delete history permanently. Use `--dry-run` first and confirm with the user unless they asked for the deletion.
-- If the plugin's pre-edit hook is active, a disposable version is stored before each of your edits, noted "before Edit" or "before Write". You do not need to checkpoint again for single edits; add a tagged checkpoint for multi-file changes you may want to roll back together.
+- If a pre-edit hook is active, a disposable version is stored before each of your edits, with a note beginning "before" and the name of your editing tool. `ver-ls` shows whether that is happening. You then do not need to checkpoint again for single edits; add a tagged checkpoint for multi-file changes you may want to roll back together.
 - A failure with `busy` means another program held the file; retry once, then report it.

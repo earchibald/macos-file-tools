@@ -27,10 +27,12 @@ First release.
 **Packaging**
 
 - Universal binary (Apple silicon and Intel), signed with a Developer ID and notarized.
-- Claude Code plugin with a skill, a pre-edit checkpoint hook and launchers for every tool.
+- Plugins for Claude Code, the Antigravity CLI and Iris, sharing one skill. The Claude Code and Antigravity plugins add a pre-edit checkpoint hook and launchers for every tool; the Iris plugin ships the hook as a settings snippet.
+- `mft hook` reads the pre-edit event of all three agents.
 
 **Known gaps**
 
 - Not tested on network volumes or iCloud Drive.
 - Versions of folders and document packages work in simple cases but are not covered by tests.
 - Whether versions stored here appear in an app's "Browse All Versions", and the reverse, has not been confirmed first-hand.
+- The Antigravity hook has not been watched firing in a live session, and the Iris plugin has not been loaded in Iris.

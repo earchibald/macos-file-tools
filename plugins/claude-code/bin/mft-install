@@ -1,0 +1,3 @@
+#!/bin/sh
+# Installs the mft release this plugin was written for into ~/.local/bin.
+MFT_VERSION="${MFT_VERSION:-0.0.1}" exec sh "$(dirname "$0")/../scripts/install.sh"
