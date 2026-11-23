@@ -1,0 +1,14 @@
+{
+  "name": "macos-file-tools",
+  "description": "Small macOS file tools with one interface: versions, undo and safe file operations for agents and scripts.",
+  "owner": {
+    "name": "earchibald"
+  },
+  "plugins": [
+    {
+      "name": "mft",
+      "source": "./plugin",
+      "description": "Checkpoint, compare, undo and restore file versions on macOS, using the same version store as document apps."
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "description": "Store a disposable version of a file just before an agent edits it, so every edit can be undone with ver-undo.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/mft hook --by claude-code",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

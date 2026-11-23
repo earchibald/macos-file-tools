@@ -1,0 +1,9 @@
+{
+  "name": "mft",
+  "version": "0.0.1",
+  "description": "Checkpoint, compare, undo and restore file versions on macOS, using the same version store as document apps. Stores a version before every edit.",
+  "author": { "name": "earchibald", "url": "https://github.com/earchibald" },
+  "homepage": "https://github.com/earchibald/macos-file-tools",
+  "repository": "https://github.com/earchibald/macos-file-tools",
+  "keywords": ["macos", "versions", "undo", "files", "checkpoint"]
+}
